@@ -1,0 +1,56 @@
+import funkin.modding.module.Module;
+import funkin.audio.FunkinSound;
+import funkin.play.PauseSubState;
+import funkin.play.PlayState;
+import funkin.ui.debug.latency.LatencyState;
+import funkin.ui.options.OptionsState;
+
+import flixel.FlxG;
+
+class PauseOptions extends Module {
+    var wasPaused:Bool = false ;
+    var stateParams:PlayStateParams;
+    var isChartingState:Bool = false ;
+
+    function new() {
+        super("PauseOptions");
+    }
+
+    override function onSongLoaded(event:SongLoadScriptEvent) {
+        if (PlayState.instance == null) return;
+        stateParams = PlayState.instance.lastParams;
+    }
+
+    override function onSubStateOpenBegin(event:SubStateScriptEvent) {
+        if (isChartingState) {
+            if (event.targetState != PlayState.instance && !Std.isOfType(event.targetState, LatencyState) && wasPaused) {
+                //FlxG.switchState(() -> new ChartEditorState(chartEditorParams));
+            }
+        } else {
+            if (event.targetState != PlayState.instance && !Std.isOfType(event.targetState, LatencyState) && wasPaused) {
+                FlxG.switchState(() -> new PlayState(stateParams));
+                wasPaused = false;
+            }
+        }
+    }
+
+    override function onSubStateOpenEnd(event:SubStateScriptEvent) {
+        if (Std.isOfType(event.targetState, PauseSubState) && !PlayState.instance.isMinimalMode) {
+            var pauseState = event.targetState;
+            var menuEntries = pauseState.currentMenuEntries;
+            menuEntries.insert(menuEntries.length - 1, {
+                text: "Options",
+                callback: optionsCallback
+            });
+
+            pauseState.clearAndAddMenuEntries();
+            pauseState.changeSelection();
+        }
+    }
+
+    function optionsCallback() {
+        wasPaused = true;
+        FlxG.switchState(() -> new OptionsState());
+        //FunkinSound.playMusic('freakyMenu', {overrideExisting: true, persist: true});
+    }
+}

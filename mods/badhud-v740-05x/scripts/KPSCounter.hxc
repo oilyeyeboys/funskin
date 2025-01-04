@@ -1,0 +1,123 @@
+import funkin.modding.module.Module;
+import funkin.play.PauseSubState;
+import funkin.play.PlayState;
+import funkin.Preferences;
+import funkin.Paths;
+
+import flixel.text.FlxTextBorderStyle;
+import flixel.text.FlxText;
+import flixel.util.FlxSave;
+import flixel.FlxG;
+
+import Math;
+import Std;
+
+class KPSCounter extends Module {
+    var save:FlxSave;
+    var state:PlayState;
+    var loaded:Bool = false ;
+
+    var kpsText:FlxText;
+    var kps:Int = 0 ;
+    var kpsMax:Int = 0 ;
+
+    var lastSecondKeyPresses:Array<Float> = [] ;
+    var updateInterval:Float = 1 / Preferences.framerate ;
+    var lastUpdateTime:Float = 0 ;
+
+    function new() {
+        super("KPSCounter");
+        save = new FlxSave();
+        save.bind("BadHUDOptions", "FunkinCrew/BadHUD");
+    }
+
+    override function onSongLoaded(event:SongLoadScriptEvent) {
+        if (save.data.kpsCounter) {
+            if (PlayState.instance == null) return;
+            state = PlayState.instance;
+            loaded = true;
+
+            // Binding with BadHUDOptions
+            var badHUDOptions = new BadHUDOptions();
+
+            // Create KPS Text Element
+            var kpsTextXPos = 10;
+            var kpsTextYPos = FlxG.height * 0.6;
+
+            kpsText = new FlxText(kpsTextXPos, kpsTextYPos, FlxG.width, "", 20);
+            kpsText.setFormat(Paths.font(badHUDOptions.font), save.data.hudFontSize, 0xFFFFFFFF, "left", FlxTextBorderStyle.OUTLINE, 0xFF000000);
+            kpsText.scrollFactor.set();
+            kpsText.borderSize = 1.25;
+            kpsText.zIndex = 851;
+            kpsText.text = 'KPS: 0' + '\nMax KPS: 0';
+
+            state.add(kpsText);
+            kpsText.cameras = [state.camHUD];
+        }
+    }
+
+    override function onUpdate(event:UpdateScriptEvent) {
+        if (PlayState.instance == null || !loaded || !save.data.kpsCounter) return;
+
+        var currentTime = FlxG.game.ticks / 1000;
+
+        // Check for key presses
+        var keyDownPressed = state.controls.NOTE_DOWN_P;
+        var keyUpPressed = state.controls.NOTE_UP_P;
+        var keyLeftPressed = state.controls.NOTE_LEFT_P;
+        var keyRightPressed = state.controls.NOTE_RIGHT_P;
+
+        if (keyDownPressed) lastSecondKeyPresses.push(currentTime);
+        if (keyUpPressed) lastSecondKeyPresses.push(currentTime);
+        if (keyLeftPressed) lastSecondKeyPresses.push(currentTime);
+        if (keyRightPressed) lastSecondKeyPresses.push(currentTime);
+
+        // Remove key presses older than 1 second
+        while (lastSecondKeyPresses.length > 0 && currentTime - lastSecondKeyPresses[0] > 1) {
+            lastSecondKeyPresses.shift();
+        }
+
+        // Calculate KPS
+        kps = lastSecondKeyPresses.length;
+        kpsMax = Std.int(Math.max(kpsMax, kps));
+
+        // Update display
+        if (currentTime - lastUpdateTime >= updateInterval) {
+            updateKPS();
+            lastUpdateTime = currentTime;
+        }
+    }
+
+    function updateKPS() {
+        if (kpsText != null) {
+            kpsText.text = 'KPS: ' + Math.round(kps * 10) / 10 + '\nMax KPS: ' + Math.round(kpsMax * 10) / 10;
+        }
+    }
+
+    // Cleanup stuff
+    override function onSubStateOpenBegin(event:SubStateScriptEvent) {
+        if (!Std.isOfType(event.targetState, PlayState) && !Std.isOfType(event.targetState, PauseSubState)) {
+            cleanup();
+        }
+    }
+
+    override function onSubStateCloseBegin(event:SubStateScriptEvent) {
+        if (Std.isOfType(event.targetState, PlayState)) {
+            cleanup();
+        }
+    }
+
+    override function onSongEnd(event:ScriptEvent) { cleanup(); }
+
+    override function onSongRetry(event:ScriptEvent) { cleanup(); }
+
+    override function onDestroy(event:ScriptEvent) { cleanup(); }
+
+    function cleanup() {
+        if (kpsText != null) kpsText.destroy();
+        kpsText = null;
+        kps = 0;
+        kpsMax = 0;
+        lastSecondKeyPresses = [];
+    }
+}
